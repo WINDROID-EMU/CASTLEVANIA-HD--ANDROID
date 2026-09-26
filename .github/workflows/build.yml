@@ -18,6 +18,9 @@ on:
           - release
           - both
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Android APK
@@ -39,7 +42,8 @@ jobs:
 
       - name: Setup Android NDK & CMake
         run: |
-          echo "Accepting licenses..."
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          echo "Accepting Android SDK licenses..."
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
           echo "Installing NDK 27.0.12077973 and CMake 3.22.1..."
           sdkmanager --install "ndk;27.0.12077973" "cmake;3.22.1"
@@ -48,13 +52,13 @@ jobs:
         run: chmod +x android/gradlew
 
       - name: Build Debug APK
-        if: ${{ github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'both' || github.event.inputs.build_type == '' }}
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'both' }}
         run: |
           cd android
           ./gradlew assembleDebug --stacktrace
 
       - name: Build Release APK
-        if: ${{ github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'both' || github.event.inputs.build_type == '' }}
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'both' }}
         run: |
           cd android
           ./gradlew assembleRelease --stacktrace
