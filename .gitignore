@@ -1,0 +1,33 @@
+# Built application packages
+*.apk
+*.aab
+
+# Android build outputs & caches
+.gradle/
+**/build/
+**/intermediates/
+**/generated/
+**/outputs/
+**/tmp/
+**/reports/
+
+# CMake / NDK build cache
+**/.cxx/
+
+# Local SDK and configuration
+local.properties
+.idea/
+*.iml
+.navigation/
+
+# OS and Editor junk
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.bak
+scratch/
+
+# Keystores (keep private)
+*.keystore
+*.jks

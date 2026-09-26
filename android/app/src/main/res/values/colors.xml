@@ -1,0 +1,5 @@
+<resources>
+    <color name="black">#000000</color>
+    <color name="translucent_pad">#55000000</color>
+    <color name="translucent_pad_pressed">#88ff3b30</color>
+</resources>
