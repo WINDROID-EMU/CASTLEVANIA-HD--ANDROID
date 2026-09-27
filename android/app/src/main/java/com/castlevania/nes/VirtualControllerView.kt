@@ -258,17 +258,18 @@ class VirtualControllerView @JvmOverloads constructor(
 
     init {
         try {
-            bitmapJump = BitmapFactory.decodeResource(resources, R.drawable.btn_jump)
-            bitmapAttack = BitmapFactory.decodeResource(resources, R.drawable.btn_attack)
-            bitmapAnalogBase = BitmapFactory.decodeResource(resources, R.drawable.analog_base)
-            bitmapAnalogKnob = BitmapFactory.decodeResource(resources, R.drawable.analog_knob)
+            val opts = BitmapFactory.Options().apply { inScaled = false }
+            bitmapJump = BitmapFactory.decodeResource(resources, R.drawable.btn_jump, opts)
+            bitmapAttack = BitmapFactory.decodeResource(resources, R.drawable.btn_attack, opts)
+            bitmapAnalogBase = BitmapFactory.decodeResource(resources, R.drawable.analog_base, opts)
+            bitmapAnalogKnob = BitmapFactory.decodeResource(resources, R.drawable.analog_knob, opts)
 
-            bitmapItemNone = BitmapFactory.decodeResource(resources, R.drawable.btn_item_none)
-            bitmapItemDagger = BitmapFactory.decodeResource(resources, R.drawable.btn_item_dagger)
-            bitmapItemAxe = BitmapFactory.decodeResource(resources, R.drawable.btn_item_axe)
-            bitmapItemHolyWater = BitmapFactory.decodeResource(resources, R.drawable.btn_item_holywater)
-            bitmapItemCross = BitmapFactory.decodeResource(resources, R.drawable.btn_item_cross)
-            bitmapItemStopwatch = BitmapFactory.decodeResource(resources, R.drawable.btn_item_stopwatch)
+            bitmapItemNone = BitmapFactory.decodeResource(resources, R.drawable.btn_item_none, opts)
+            bitmapItemDagger = BitmapFactory.decodeResource(resources, R.drawable.btn_item_dagger, opts)
+            bitmapItemAxe = BitmapFactory.decodeResource(resources, R.drawable.btn_item_axe, opts)
+            bitmapItemHolyWater = BitmapFactory.decodeResource(resources, R.drawable.btn_item_holywater, opts)
+            bitmapItemCross = BitmapFactory.decodeResource(resources, R.drawable.btn_item_cross, opts)
+            bitmapItemStopwatch = BitmapFactory.decodeResource(resources, R.drawable.btn_item_stopwatch, opts)
 
             post(subweaponPollRunnable)
         } catch (e: Exception) {
