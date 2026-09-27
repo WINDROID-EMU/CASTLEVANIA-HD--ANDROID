@@ -6,7 +6,7 @@
 [![Core](https://img.shields.io/badge/Core-Mesen%20C%2B%2B17-red)](https://github.com/SourMesen/Mesen2)
 [![License](https://img.shields.io/badge/License-GPLv3-yellow.svg)](LICENSE)
 
-Port nativo e independente do clássico **Castlevania (NES)** para **Android**, trazendo suporte integrado ao pacote **HD Remaster** (texturas de alta definição e trilha sonora orquestrada) através do motor de emulação **Mesen** rodando via **C++ NDK (OpenGL ES 2.0)** e interface fluida em **Kotlin**.
+clássico **Castlevania (NES)** para **Android**, trazendo suporte integrado ao pacote **HD Remaster** (texturas de alta definição e trilha sonora orquestrada) através do motor de emulação **Mesen** rodando via **C++ NDK (OpenGL ES 2.0)** e interface fluida em **Kotlin**.
 
 ---
 
