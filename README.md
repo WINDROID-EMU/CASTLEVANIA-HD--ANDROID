@@ -1,4 +1,4 @@
-# 🦇 Castlevania NES — HD Remaster (Android Port)
+# 🦇 Castlevania NES — HD Remaster
 
 [![Build Castlevania NES Android](https://github.com/OWNER/REPOSITORY/actions/workflows/build.yml/badge.svg)](https://github.com/OWNER/REPOSITORY/actions/workflows/build.yml)
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024%2B)-3DDC84?logo=android&logoColor=white)](https://android.com)
