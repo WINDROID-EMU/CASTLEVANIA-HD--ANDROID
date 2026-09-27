@@ -38,10 +38,15 @@ class SettingsOverlayView @JvmOverloads constructor(
     var onFilterChangedListener: ((smooth: Boolean) -> Unit)? = null
     var onFilterModeChangedListener: ((mode: Int) -> Unit)? = null
     var onStretchChangedListener: ((stretch: Boolean) -> Unit)? = null
+    var onRefreshRateChangedListener: ((targetHz: Float) -> Unit)? = null
     var onControllerOpacityChangedListener: ((opacity: Float) -> Unit)? = null
     var onVibrationChangedListener: ((enabled: Boolean) -> Unit)? = null
     var onEditLayoutClickListener: (() -> Unit)? = null
     var onResetLayoutClickListener: (() -> Unit)? = null
+
+    private var refreshRateBadge: TextView? = null
+    private var detectedDisplayHzText: TextView? = null
+    private var videoFpsBadge: TextView? = null
 
     private var soundPreviewPlayer: MediaPlayer? = null
 
@@ -453,6 +458,10 @@ class SettingsOverlayView @JvmOverloads constructor(
         }
         layout.addView(swStretch)
 
+        // Screen Refresh Rate (120 Hz by default)
+        val refreshRateSection = createRefreshRateSection(dp1)
+        layout.addView(refreshRateSection)
+
         // Video Filter & Upscaling Engine Selector
         val filterSection = createVideoFilterSection(dp1)
         layout.addView(filterSection)
@@ -471,6 +480,277 @@ class SettingsOverlayView @JvmOverloads constructor(
         layout.addView(swLimit)
 
         return scroll
+    }
+
+    private data class RefreshRateOption(
+        val hz: Float,
+        val icon: String,
+        val title: String,
+        val tag: String?,
+        val tagColor: String?,
+        val description: String
+    )
+
+    private fun createRefreshRateSection(dp1: Float): View {
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (12 * dp1).toInt()
+            }
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#141622"))
+                cornerRadius = 10 * dp1
+                setStroke((1 * dp1).toInt(), Color.parseColor("#2A2D40"))
+            }
+            setPadding((12 * dp1).toInt(), (10 * dp1).toInt(), (12 * dp1).toInt(), (10 * dp1).toInt())
+        }
+
+        // Section Title Header
+        val headerLayout = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (8 * dp1).toInt()
+            }
+        }
+
+        val titleView = TextView(context).apply {
+            text = "⚡ TAXA DE ATUALIZAÇÃO (REFRESH RATE)"
+            setTextColor(Color.parseColor("#00E5FF"))
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+        }
+
+        val badge = TextView(context).apply {
+            text = "120 HZ ATIVO"
+            setTextColor(Color.parseColor("#00E5FF"))
+            textSize = 9.5f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding((6 * dp1).toInt(), (2 * dp1).toInt(), (6 * dp1).toInt(), (2 * dp1).toInt())
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#0C2433"))
+                cornerRadius = 4 * dp1
+                setStroke((1 * dp1).toInt(), Color.parseColor("#00B0FF"))
+            }
+        }
+        refreshRateBadge = badge
+
+        headerLayout.addView(titleView)
+        headerLayout.addView(badge)
+        container.addView(headerLayout)
+
+        val subDesc = TextView(context).apply {
+            text = "Taxa de atualização de tela e sincronia vertical (VSync) do motor gráfico:"
+            setTextColor(Color.parseColor("#9E9EAF"))
+            textSize = 10.5f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (8 * dp1).toInt()
+            }
+        }
+        container.addView(subDesc)
+
+        val options = listOf(
+            RefreshRateOption(
+                hz = 120.0f,
+                icon = "🚀",
+                title = "120 Hz (Ultra Fluidez & Menor Latência)",
+                tag = "PADRÃO • RECOMENDADO",
+                tagColor = "#00E5FF",
+                description = "Sincroniza o motor gráfico a 120 Hz com pulldown 2:2 perfeito (60 FPS NES). Corta o atraso de toque pela metade (8.3ms) e zera micro-travamentos."
+            ),
+            RefreshRateOption(
+                hz = 60.0f,
+                icon = "🔋",
+                title = "60 Hz (Padrão Antigo / Economia)",
+                tag = "ECONOMIA",
+                tagColor = "#81C784",
+                description = "Taxa clássica de 60 Hz. Recomendada apenas se desejar economizar o consumo de bateria em telas antigas."
+            )
+        )
+
+        var selectedHz = prefs.getFloat("opt_refresh_rate", 120.0f)
+        val optionViews = mutableListOf<Triple<View, TextView, TextView>>()
+
+        fun updateHzSelection(hz: Float) {
+            selectedHz = hz
+            prefs.edit().putFloat("opt_refresh_rate", hz).apply()
+            val is120 = hz >= 110.0f
+            badge.text = if (is120) "120 HZ ATIVO" else "60 HZ ATIVO"
+            badge.setTextColor(if (is120) Color.parseColor("#00E5FF") else Color.parseColor("#81C784"))
+            badge.background = GradientDrawable().apply {
+                val c = if (is120) "#0C2433" else "#1B2E20"
+                val s = if (is120) "#00B0FF" else "#2E7D32"
+                setColor(Color.parseColor(c))
+                cornerRadius = 4 * dp1
+                setStroke((1 * dp1).toInt(), Color.parseColor(s))
+            }
+
+            videoFpsBadge?.text = if (is120) "⚡ 120 HZ • 60 FPS NES" else "60 FPS NATIVO"
+
+            onRefreshRateChangedListener?.invoke(hz)
+
+            for (i in options.indices) {
+                val opt = options[i]
+                val (card, checkView, titleV) = optionViews[i]
+                val isSel = Math.abs(opt.hz - hz) < 1.0f
+
+                card.background = GradientDrawable().apply {
+                    if (isSel) {
+                        setColor(Color.parseColor("#152438"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1.5f * dp1).toInt(), Color.parseColor("#00E5FF"))
+                    } else {
+                        setColor(Color.parseColor("#0F111A"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1 * dp1).toInt(), Color.parseColor("#1F2232"))
+                    }
+                }
+
+                if (isSel) {
+                    checkView.text = "✔"
+                    checkView.setTextColor(Color.parseColor("#00E5FF"))
+                    titleV.setTextColor(Color.parseColor("#80D8FF"))
+                } else {
+                    checkView.text = "○"
+                    checkView.setTextColor(Color.parseColor("#44475A"))
+                    titleV.setTextColor(Color.parseColor("#DDDDDD"))
+                }
+            }
+        }
+
+        for (opt in options) {
+            val isSel = Math.abs(opt.hz - selectedHz) < 1.0f
+
+            val card = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = (6 * dp1).toInt()
+                }
+                isClickable = true
+                isFocusable = true
+                setPadding((10 * dp1).toInt(), (8 * dp1).toInt(), (10 * dp1).toInt(), (8 * dp1).toInt())
+                background = GradientDrawable().apply {
+                    if (isSel) {
+                        setColor(Color.parseColor("#152438"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1.5f * dp1).toInt(), Color.parseColor("#00E5FF"))
+                    } else {
+                        setColor(Color.parseColor("#0F111A"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1 * dp1).toInt(), Color.parseColor("#1F2232"))
+                    }
+                }
+            }
+
+            val topRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+
+            val iconView = TextView(context).apply {
+                text = opt.icon
+                textSize = 14f
+                setPadding(0, 0, (6 * dp1).toInt(), 0)
+            }
+            topRow.addView(iconView)
+
+            val titleV = TextView(context).apply {
+                text = opt.title
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(if (isSel) Color.parseColor("#80D8FF") else Color.parseColor("#DDDDDD"))
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+            }
+            topRow.addView(titleV)
+
+            if (opt.tag != null) {
+                val tagV = TextView(context).apply {
+                    text = opt.tag
+                    textSize = 8.5f
+                    typeface = Typeface.DEFAULT_BOLD
+                    val colorHex = opt.tagColor ?: "#00E5FF"
+                    setTextColor(Color.parseColor(colorHex))
+                    setPadding((5 * dp1).toInt(), (1 * dp1).toInt(), (5 * dp1).toInt(), (1 * dp1).toInt())
+                    background = GradientDrawable().apply {
+                        setColor(Color.parseColor("#112433"))
+                        cornerRadius = 3 * dp1
+                        setStroke((1 * dp1).toInt(), Color.parseColor(colorHex))
+                    }
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        rightMargin = (8 * dp1).toInt()
+                    }
+                }
+                topRow.addView(tagV)
+            }
+
+            val checkView = TextView(context).apply {
+                text = if (isSel) "✔" else "○"
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(if (isSel) Color.parseColor("#00E5FF") else Color.parseColor("#44475A"))
+            }
+            topRow.addView(checkView)
+            card.addView(topRow)
+
+            val descV = TextView(context).apply {
+                text = opt.description
+                setTextColor(Color.parseColor("#A0A0B2"))
+                textSize = 10f
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    topMargin = (3 * dp1).toInt()
+                    leftMargin = (22 * dp1).toInt()
+                }
+            }
+            card.addView(descV)
+
+            card.setOnClickListener {
+                updateHzSelection(opt.hz)
+                showStatus("Taxa definida para ${opt.hz.toInt()} Hz")
+            }
+
+            optionViews.add(Triple(card, checkView, titleV))
+            container.addView(card)
+        }
+
+        // Info footer
+        val detectedText = TextView(context).apply {
+            text = "ℹ️ Motor gráfico otimizado com VSync a 120Hz para respostas ultrarrápidas de toque e gamepad."
+            setTextColor(Color.parseColor("#78909C"))
+            textSize = 9.5f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = (4 * dp1).toInt()
+            }
+        }
+        detectedDisplayHzText = detectedText
+        container.addView(detectedText)
+
+        return container
     }
 
     private data class FilterOption(
@@ -519,17 +799,21 @@ class SettingsOverlayView @JvmOverloads constructor(
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
         }
         val fpsBadge = TextView(context).apply {
-            text = "60 FPS NATIVO"
-            setTextColor(Color.parseColor("#81C784"))
+            val is120 = prefs.getFloat("opt_refresh_rate", 120.0f) >= 110.0f
+            text = if (is120) "⚡ 120 HZ • 60 FPS NES" else "60 FPS NATIVO"
+            setTextColor(if (is120) Color.parseColor("#00E5FF") else Color.parseColor("#81C784"))
             textSize = 9.5f
             typeface = Typeface.DEFAULT_BOLD
             setPadding((6 * dp1).toInt(), (2 * dp1).toInt(), (6 * dp1).toInt(), (2 * dp1).toInt())
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#1B2E20"))
+                val c = if (is120) "#0C2433" else "#1B2E20"
+                val s = if (is120) "#00B0FF" else "#2E7D32"
+                setColor(Color.parseColor(c))
                 cornerRadius = 4 * dp1
-                setStroke((1 * dp1).toInt(), Color.parseColor("#2E7D32"))
+                setStroke((1 * dp1).toInt(), Color.parseColor(s))
             }
         }
+        videoFpsBadge = fpsBadge
         headerLayout.addView(titleView)
         headerLayout.addView(fpsBadge)
         container.addView(headerLayout)
@@ -1610,6 +1894,20 @@ class SettingsOverlayView @JvmOverloads constructor(
                 }
             })
             .start()
+    }
+
+    fun updateActiveDisplayStats(displayHz: Float, renderFps: Float) {
+        val hzInt = displayHz.toInt()
+        val fpsInt = renderFps.toInt()
+        detectedDisplayHzText?.text = "ℹ️ Painel detectado: ${hzInt} Hz | Motor gráfico: ~${fpsInt} FPS"
+        val is120 = prefs.getFloat("opt_refresh_rate", 120.0f) >= 110.0f
+        if (is120) {
+            refreshRateBadge?.text = "${hzInt} HZ ATIVO"
+            videoFpsBadge?.text = "⚡ ${hzInt} HZ • 60 FPS NES"
+        } else {
+            refreshRateBadge?.text = "60 HZ ATIVO"
+            videoFpsBadge?.text = "60 FPS NATIVO"
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {

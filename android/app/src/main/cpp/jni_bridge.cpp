@@ -128,11 +128,12 @@ public:
             _lastAllocWidth = _width;
             _lastAllocHeight = _height;
             _textureNeedsAlloc = false;
+            _isDirty = false;
             LOGI("Uploaded initial/resized texture %ux%u to texId %u", _width, _height, textureId);
-        } else {
+        } else if (_isDirty) {
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, _width, _height, GL_RGBA, GL_UNSIGNED_BYTE, _pixelBuffer);
+            _isDirty = false;
         }
-        _isDirty = false;
     }
 
     uint32_t GetWidth()

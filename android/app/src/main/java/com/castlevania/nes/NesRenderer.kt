@@ -244,6 +244,12 @@ class NesRenderer : GLSurfaceView.Renderer {
     var filterMode: Int = FILTER_MODE_NORMAL
     var isStretchToScreen: Boolean = false
 
+    // Real-time rendering frame-rate measurement (120 FPS / 60 FPS)
+    private var lastFpsNanoTime: Long = 0L
+    private var renderedFrameCount: Int = 0
+    var measuredFps: Float = 120.0f
+        private set
+
     // Backwards compatibility property
     var isSmoothFilter: Boolean
         get() = filterMode == FILTER_MODE_BILINEAR
@@ -312,6 +318,18 @@ class NesRenderer : GLSurfaceView.Renderer {
     }
 
     override fun onDrawFrame(gl: GL10?) {
+        // Track real-time rendering refresh rate
+        val now = System.nanoTime()
+        renderedFrameCount++
+        if (lastFpsNanoTime == 0L) {
+            lastFpsNanoTime = now
+        } else if (now - lastFpsNanoTime >= 1_000_000_000L) {
+            val elapsedSec = (now - lastFpsNanoTime).toDouble() / 1_000_000_000.0
+            measuredFps = (renderedFrameCount / elapsedSec).toFloat()
+            renderedFrameCount = 0
+            lastFpsNanoTime = now
+        }
+
         // Clear whole surface
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
 

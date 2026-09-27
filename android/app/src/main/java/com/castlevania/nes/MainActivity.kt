@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import android.util.Log
 
 class MainActivity : AppCompatActivity() {
 
@@ -182,6 +183,10 @@ class MainActivity : AppCompatActivity() {
             glView.setStretchToScreen(stretch)
         }
 
+        settingsView.onRefreshRateChangedListener = { targetHz ->
+            applyDisplayRefreshRate(targetHz)
+        }
+
         settingsView.onControllerOpacityChangedListener = { opacity ->
             controllerView.controllerOpacity = opacity
         }
@@ -314,10 +319,84 @@ class MainActivity : AppCompatActivity() {
         glView.setFilterMode(filterMode)
         glView.setStretchToScreen(prefs.getBoolean("opt_stretch", false))
 
+        // Screen Refresh Rate (Default 120Hz)
+        val targetHz = prefs.getFloat("opt_refresh_rate", 120.0f)
+        applyDisplayRefreshRate(targetHz)
+
         // Controller Opacity & Vibration
         val opacity = prefs.getInt("opt_opacity", VirtualControllerView.DEFAULT_OPACITY_PERCENT) / 100.0f
         controllerView.controllerOpacity = opacity
         controllerView.isVibrationEnabled = prefs.getBoolean("opt_vibration", true)
+    }
+
+    fun applyDisplayRefreshRate(targetHz: Float = 120.0f) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val currentDisplay = display
+                if (currentDisplay != null) {
+                    val modes = currentDisplay.supportedModes
+                    val bestMode = if (targetHz >= 110.0f) {
+                        modes.filter { it.refreshRate >= 119.0f }.maxByOrNull { it.refreshRate }
+                            ?: modes.filter { it.refreshRate >= 89.0f }.maxByOrNull { it.refreshRate }
+                            ?: modes.maxByOrNull { it.refreshRate }
+                    } else {
+                        modes.filter { it.refreshRate in 59.0f..61.0f }.firstOrNull()
+                            ?: modes.minByOrNull { it.refreshRate }
+                    }
+
+                    val params = window.attributes
+                    if (bestMode != null) {
+                        params.preferredDisplayModeId = bestMode.modeId
+                    }
+                    params.preferredRefreshRate = targetHz
+                    window.attributes = params
+
+                    Log.i("MainActivity", "120Hz display mode configured: modeId=${bestMode?.modeId}, rate=${bestMode?.refreshRate}Hz, preferred=${targetHz}Hz")
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                @Suppress("DEPRECATION")
+                val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                @Suppress("DEPRECATION")
+                val currentDisplay = windowManager.defaultDisplay
+                @Suppress("DEPRECATION")
+                val modes = currentDisplay.supportedModes
+                val bestMode = if (targetHz >= 110.0f) {
+                    modes.filter { it.refreshRate >= 119.0f }.maxByOrNull { it.refreshRate }
+                        ?: modes.filter { it.refreshRate >= 89.0f }.maxByOrNull { it.refreshRate }
+                        ?: modes.maxByOrNull { it.refreshRate }
+                } else {
+                    modes.filter { it.refreshRate in 59.0f..61.0f }.firstOrNull()
+                        ?: modes.minByOrNull { it.refreshRate }
+                }
+
+                val params = window.attributes
+                if (bestMode != null) {
+                    params.preferredDisplayModeId = bestMode.modeId
+                }
+                params.preferredRefreshRate = targetHz
+                window.attributes = params
+                Log.i("MainActivity", "Display mode configured (API 23+): modeId=${bestMode?.modeId}, rate=${bestMode?.refreshRate}Hz")
+            }
+
+            glView.setTargetRefreshRate(targetHz)
+        } catch (e: Exception) {
+            Log.w("MainActivity", "Could not set display refresh rate: ${e.message}")
+        }
+    }
+
+    fun getActiveRefreshRate(): Float {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                display?.refreshRate ?: 120.0f
+            } else {
+                @Suppress("DEPRECATION")
+                val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                @Suppress("DEPRECATION")
+                windowManager.defaultDisplay.refreshRate
+            }
+        } catch (e: Exception) {
+            120.0f
+        }
     }
 
     private fun openSettingsMenu() {
@@ -328,6 +407,7 @@ class MainActivity : AppCompatActivity() {
         NativeBridge.nativePause()
         audioPlayer.stop()
 
+        settingsView.updateActiveDisplayStats(getActiveRefreshRate(), glView.renderer.measuredFps)
         settingsView.showMenu()
     }
 
@@ -349,6 +429,11 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         hideSystemUI()
+
+        val prefs = getSharedPreferences("castlevania_settings", Context.MODE_PRIVATE)
+        val targetHz = prefs.getFloat("opt_refresh_rate", 120.0f)
+        applyDisplayRefreshRate(targetHz)
+
         glView.onResume()
         if (!isMenuOpen && !isEditMode) {
             audioPlayer.start()
