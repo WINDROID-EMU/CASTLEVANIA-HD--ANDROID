@@ -44,6 +44,20 @@ class SettingsOverlayView @JvmOverloads constructor(
     var onEditLayoutClickListener: (() -> Unit)? = null
     var onResetLayoutClickListener: (() -> Unit)? = null
 
+    // Gameplay Cheats & Features Listeners
+    var onInfiniteHealthChangedListener: ((enabled: Boolean) -> Unit)? = null
+    var onInfiniteHeartsChangedListener: ((enabled: Boolean) -> Unit)? = null
+    var onOneHitBossChangedListener: ((enabled: Boolean) -> Unit)? = null
+    var onDifficultyModeChangedListener: ((mode: Int) -> Unit)? = null
+    var onDoubleJumpChangedListener: ((enabled: Boolean) -> Unit)? = null
+    var onLatchStairsChangedListener: ((enabled: Boolean) -> Unit)? = null
+    var onInfiniteLivesChangedListener: ((enabled: Boolean) -> Unit)? = null
+    var onMaxWhipChangedListener: ((enabled: Boolean) -> Unit)? = null
+    var onTripleShotChangedListener: ((enabled: Boolean) -> Unit)? = null
+    var onSmartEnemyAiChangedListener: ((enabled: Boolean) -> Unit)? = null
+    var onSmartAiAggressionChangedListener: ((level: Int) -> Unit)? = null
+    var onCrossHeartRecoveryChangedListener: ((enabled: Boolean) -> Unit)? = null
+
     private var refreshRateBadge: TextView? = null
     private var detectedDisplayHzText: TextView? = null
     private var videoFpsBadge: TextView? = null
@@ -149,36 +163,49 @@ class SettingsOverlayView @JvmOverloads constructor(
         mainContainer.addView(headerLayout)
 
         // --- 2. TAB BAR ---
-        val tabBar = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
+        val tabScroll = HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            isFillViewport = true
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (36 * dp1).toInt()
+                (38 * dp1).toInt()
             ).apply {
                 bottomMargin = (10 * dp1).toInt()
             }
+        }
+
+        val tabBar = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#0C0D13"))
                 cornerRadius = 8 * dp1
             }
             setPadding((3 * dp1).toInt(), (3 * dp1).toInt(), (3 * dp1).toInt(), (3 * dp1).toInt())
         }
+        tabScroll.addView(tabBar)
 
-        val tabTitles = listOf("💾 Estados", "🖥️ Vídeo", "🎧 Áudio", "🎮 Controles", "🏆 Conquistas")
+        val tabTitles = listOf("🕹️ Gameplayer", "💾 Estados", "🖥️ Vídeo", "🎧 Áudio", "🎮 Controles", "🏆 Conquistas")
         for (i in tabTitles.indices) {
             val btnTab = Button(context).apply {
                 text = tabTitles[i]
                 textSize = 11f
                 typeface = Typeface.DEFAULT_BOLD
                 isAllCaps = false
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f)
-                setPadding(0, 0, 0, 0)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT
+                )
+                setPadding((12 * dp1).toInt(), 0, (12 * dp1).toInt(), 0)
                 setOnClickListener { selectTab(i) }
             }
             tabButtons.add(btnTab)
             tabBar.addView(btnTab)
         }
-        mainContainer.addView(tabBar)
+        mainContainer.addView(tabScroll)
 
         // Status banner
         statusMessageView = TextView(context).apply {
@@ -207,19 +234,20 @@ class SettingsOverlayView @JvmOverloads constructor(
         }
         mainContainer.addView(contentContainer)
 
-        // Create 5 tab views
+        // Create 6 tab views
+        val tabGameplayer = createGameplayerTab(dp1)
         val tabSave = createSaveLoadTab(dp1)
         val tabVideo = createVideoTab(dp1)
         val tabAudio = createAudioTab(dp1)
         val tabControls = createControlsTab(dp1)
         val tabAchievements = createAchievementsTab(dp1)
 
-        tabContents.addAll(listOf(tabSave, tabVideo, tabAudio, tabControls, tabAchievements))
+        tabContents.addAll(listOf(tabGameplayer, tabSave, tabVideo, tabAudio, tabControls, tabAchievements))
         for (t in tabContents) {
             contentContainer.addView(t)
         }
 
-        // Initially select tab 0
+        // Initially select tab 0 (Gameplayer)
         selectTab(0)
     }
 
@@ -248,7 +276,7 @@ class SettingsOverlayView @JvmOverloads constructor(
             }
         }
 
-        if (index == 4) {
+        if (index == 5) {
             refreshAchievementsAction?.invoke()
         }
     }
@@ -263,6 +291,699 @@ class SettingsOverlayView @JvmOverloads constructor(
 
     private val hideStatusRunnable = Runnable {
         statusMessageView.visibility = View.GONE
+    }
+
+    // =========================================================================
+    // TAB 0: GAMEPLAYER (TRAPAÇAS, HABILIDADES & DIFICULDADE)
+    // =========================================================================
+    private fun createGameplayerTab(dp1: Float): View {
+        val scroll = ScrollView(context).apply {
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+            isFillViewport = true
+        }
+
+        val layout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            setPadding((4 * dp1).toInt(), (4 * dp1).toInt(), (4 * dp1).toInt(), (4 * dp1).toInt())
+        }
+        scroll.addView(layout)
+
+        // Hardcore warning notice if active
+        if (RetroAchievementsManager.isHardcore()) {
+            val hcWarning = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = (10 * dp1).toInt()
+                }
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#2A1215"))
+                    cornerRadius = 8 * dp1
+                    setStroke((1 * dp1).toInt(), Color.parseColor("#E53935"))
+                }
+                setPadding((12 * dp1).toInt(), (10 * dp1).toInt(), (12 * dp1).toInt(), (10 * dp1).toInt())
+            }
+
+            val iconWarn = TextView(context).apply {
+                text = "⚠️"
+                textSize = 16f
+                setPadding(0, 0, (8 * dp1).toInt(), 0)
+            }
+            hcWarning.addView(iconWarn)
+
+            val txtWarn = TextView(context).apply {
+                text = "Modo Hardcore do RetroAchievements ativo: Funções de assistência e trapaças ficam pausadas para proteger seu ranking oficial. Para ativá-las livremente, alterne para o Modo Softcore na aba Conquistas."
+                setTextColor(Color.parseColor("#FFCDD2"))
+                textSize = 10.5f
+            }
+            hcWarning.addView(txtWarn)
+            layout.addView(hcWarning)
+        }
+
+        // --- SEÇÃO 1: FACILIDADES & TRAPAÇAS ---
+        val secCheatsHeader = TextView(context).apply {
+            text = "🛡️ FACILIDADES & TRAPAÇAS CLÁSSICAS"
+            setTextColor(Color.parseColor("#E5C158"))
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, 0, 0, (6 * dp1).toInt())
+        }
+        layout.addView(secCheatsHeader)
+
+        // 1. Vida Infinita (God Mode)
+        val isInfHealth = prefs.getBoolean("opt_infinite_health", false)
+        val swHealth = createSwitchRow(
+            dp1,
+            "❤️ Vida Infinita (God Mode)",
+            "Mantém a vida de Simon no máximo (64 HP). Imune a danos de monstros e golpes",
+            isInfHealth
+        ) { checked ->
+            prefs.edit().putBoolean("opt_infinite_health", checked).apply()
+            onInfiniteHealthChangedListener?.invoke(checked)
+            showStatus(if (checked) "Vida Infinita ATIVADA!" else "Vida Infinita desativada")
+        }
+        layout.addView(swHealth)
+
+        // 2. Corações Infinitos (99 Corações)
+        val isInfHearts = prefs.getBoolean("opt_infinite_hearts", false)
+        val swHearts = createSwitchRow(
+            dp1,
+            "💎 Corações Infinitos (Munição Ilimitada)",
+            "Trava o contador em 99 corações. Use sub-armas à vontade sem esgotar",
+            isInfHearts
+        ) { checked ->
+            prefs.edit().putBoolean("opt_infinite_hearts", checked).apply()
+            onInfiniteHeartsChangedListener?.invoke(checked)
+            showStatus(if (checked) "Corações Infinitos ATIVADOS (99)!" else "Corações Infinitos desativados")
+        }
+        layout.addView(swHearts)
+
+        // 3. Matar o Boss com só 1 Golpe
+        val isOneHitBoss = prefs.getBoolean("opt_one_hit_boss", false)
+        val swBoss = createSwitchRow(
+            dp1,
+            "⚡ Matar Chefão com 1 Golpe (One-Hit Boss)",
+            "O primeiro golpe acertado em qualquer boss elimina sua barra de vida na hora",
+            isOneHitBoss
+        ) { checked ->
+            prefs.edit().putBoolean("opt_one_hit_boss", checked).apply()
+            onOneHitBossChangedListener?.invoke(checked)
+            showStatus(if (checked) "Matar Boss com 1 Golpe ATIVADO!" else "Matar Boss com 1 Golpe desativado")
+        }
+        layout.addView(swBoss)
+
+        // --- SEÇÃO 2: HABILIDADE ESPECIAL ---
+        val secSkillHeader = TextView(context).apply {
+            text = "🦘 HABILIDADE ESPECIAL DE MOVIMENTO"
+            setTextColor(Color.parseColor("#00E5FF"))
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, (6 * dp1).toInt(), 0, (6 * dp1).toInt())
+        }
+        layout.addView(secSkillHeader)
+
+        // 4. Pulo Duplo (Double Jump)
+        val isDoubleJump = prefs.getBoolean("opt_double_jump", true)
+        val swDoubleJump = createSwitchRow(
+            dp1,
+            "🦘 Pulo Duplo no Ar (Double Jump)",
+            "Aperte o botão de Pulo (A) no ar para realizar um segundo salto com impulso e controle de direção",
+            isDoubleJump
+        ) { checked ->
+            prefs.edit().putBoolean("opt_double_jump", checked).apply()
+            onDoubleJumpChangedListener?.invoke(checked)
+            showStatus(if (checked) "Pulo Duplo ATIVADO!" else "Pulo Duplo desativado")
+        }
+        layout.addView(swDoubleJump)
+
+        // 4.1 Subir na Escada no Ar (Mid-Air Stair Grab / Latch)
+        val isLatchStairs = prefs.getBoolean("opt_latch_stairs", true)
+        val swLatchStairs = createSwitchRow(
+            dp1,
+            "🪜 Agarrar Escadas no Ar (Subir no Salto)",
+            "Pule em qualquer altura ou metade da escada segurando CIMA para se agarrar e subir como se viesse do início. Pressione Pulo (A) na escada para saltar fora dela",
+            isLatchStairs
+        ) { checked ->
+            prefs.edit().putBoolean("opt_latch_stairs", checked).apply()
+            onLatchStairsChangedListener?.invoke(checked)
+            showStatus(if (checked) "Agarrar Escadas no Ar ATIVADO!" else "Agarrar Escadas no Ar desativado")
+        }
+        layout.addView(swLatchStairs)
+
+        // --- SEÇÃO 3: AUMENTAR A DIFICULDADE DO JOGO ---
+        val diffSection = createDifficultySection(dp1)
+        layout.addView(diffSection)
+
+        // --- SEÇÃO 4: INTELIGÊNCIA ARTIFICIAL DOS INIMIGOS ---
+        val secAiHeader = TextView(context).apply {
+            text = "🧠 INTELIGÊNCIA ARTIFICIAL DOS INIMIGOS (SMART AI)"
+            setTextColor(Color.parseColor("#B388FF"))
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, (6 * dp1).toInt(), 0, (6 * dp1).toInt())
+        }
+        layout.addView(secAiHeader)
+
+        val isSmartAi = prefs.getBoolean("opt_smart_enemy_ai", false)
+        val swSmartAi = createSwitchRow(
+            dp1,
+            "🧠 IA dos Inimigos Mais Esperta (Smart AI)",
+            "Inimigos esquivam de chicotadas pulando, rastreiam e perseguem Simon pelas costas, aumentam cadência de ataque e emboscam",
+            isSmartAi
+        ) { checked ->
+            prefs.edit().putBoolean("opt_smart_enemy_ai", checked).apply()
+            onSmartEnemyAiChangedListener?.invoke(checked)
+            showStatus(if (checked) "IA Inteligente dos Inimigos ATIVADA!" else "IA dos Inimigos restaurada ao padrão original")
+        }
+        layout.addView(swSmartAi)
+
+        val aiAggressionSection = createAiAggressionSection(dp1)
+        layout.addView(aiAggressionSection)
+
+        // --- SEÇÃO 5: BÔNUS & ARMAS ---
+        val secBonusHeader = TextView(context).apply {
+            text = "⚔️ UPGRADES E POTENCIALIZADORES"
+            setTextColor(Color.parseColor("#B0BEC5"))
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, (6 * dp1).toInt(), 0, (6 * dp1).toInt())
+        }
+        layout.addView(secBonusHeader)
+
+        // 5. Chicote Máximo
+        val isMaxWhip = prefs.getBoolean("opt_max_whip", false)
+        val swWhip = createSwitchRow(
+            dp1,
+            "⛓️ Chicote Máximo (Morning Star)",
+            "Chicote longo de corrente mais forte habilitado permanentemente",
+            isMaxWhip
+        ) { checked ->
+            prefs.edit().putBoolean("opt_max_whip", checked).apply()
+            onMaxWhipChangedListener?.invoke(checked)
+            showStatus(if (checked) "Chicote Máximo ATIVADO!" else "Chicote Máximo desativado")
+        }
+        layout.addView(swWhip)
+
+        // 6. Disparo Triplo
+        val isTripleShot = prefs.getBoolean("opt_triple_shot", false)
+        val swTriple = createSwitchRow(
+            dp1,
+            "🔥 Disparo Triplo Permanente (Triple Shot)",
+            "Permite lançar até 3 sub-armas simultaneamente na tela",
+            isTripleShot
+        ) { checked ->
+            prefs.edit().putBoolean("opt_triple_shot", checked).apply()
+            onTripleShotChangedListener?.invoke(checked)
+            showStatus(if (checked) "Disparo Triplo ATIVADO!" else "Disparo Triplo desativado")
+        }
+        layout.addView(swTriple)
+
+        // 7. Vidas Infinitas
+        val isInfLives = prefs.getBoolean("opt_infinite_lives", false)
+        val swLives = createSwitchRow(
+            dp1,
+            "👑 Vidas Infinitas (9 Vidas)",
+            "Trava as vidas em 9 para que nunca haja Game Over",
+            isInfLives
+        ) { checked ->
+            prefs.edit().putBoolean("opt_infinite_lives", checked).apply()
+            onInfiniteLivesChangedListener?.invoke(checked)
+            showStatus(if (checked) "Vidas Infinitas ATIVADAS!" else "Vidas Infinitas desativadas")
+        }
+        layout.addView(swLives)
+
+        // 8. Recuperar Coração com a Cruz Bumerangue
+        val isCrossRecovery = prefs.getBoolean("opt_cross_heart_recovery", true)
+        val swCrossRecovery = createSwitchRow(
+            dp1,
+            "🪃 Recuperar Coração ao Pegar a Cruz Bumerangue",
+            "Ao lançar a cruz e interceptá-la de volta no retorno, recupera automaticamente o coração que foi gasto ao jogá-la",
+            isCrossRecovery
+        ) { checked ->
+            prefs.edit().putBoolean("opt_cross_heart_recovery", checked).apply()
+            onCrossHeartRecoveryChangedListener?.invoke(checked)
+            showStatus(if (checked) "Recuperação de Coração da Cruz ATIVADA!" else "Recuperação de Coração desativada")
+        }
+        layout.addView(swCrossRecovery)
+
+        return scroll
+    }
+
+    private data class DifficultyOption(
+        val mode: Int,
+        val icon: String,
+        val title: String,
+        val tag: String?,
+        val tagColor: String?,
+        val description: String
+    )
+
+    private fun createDifficultySection(dp1: Float): View {
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (12 * dp1).toInt()
+                topMargin = (6 * dp1).toInt()
+            }
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#141622"))
+                cornerRadius = 10 * dp1
+                setStroke((1 * dp1).toInt(), Color.parseColor("#2A2D40"))
+            }
+            setPadding((12 * dp1).toInt(), (10 * dp1).toInt(), (12 * dp1).toInt(), (10 * dp1).toInt())
+        }
+
+        val headerLayout = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (8 * dp1).toInt()
+            }
+        }
+
+        val titleView = TextView(context).apply {
+            text = "💀 DIFICULDADE DO JOGO"
+            setTextColor(Color.parseColor("#FF5252"))
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+        }
+        headerLayout.addView(titleView)
+        container.addView(headerLayout)
+
+        val subDesc = TextView(context).apply {
+            text = "Aumente o nível de desafio e a penalidade de dano sofrido por Simon:"
+            setTextColor(Color.parseColor("#9E9EAF"))
+            textSize = 10.5f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (8 * dp1).toInt()
+            }
+        }
+        container.addView(subDesc)
+
+        val options = listOf(
+            DifficultyOption(
+                mode = 0,
+                icon = "🛡️",
+                title = "Normal (Padrão Original)",
+                tag = "ORIGINAL",
+                tagColor = "#81C784",
+                description = "Dano clássico do Castlevania de NES. Equilíbrio padrão do jogo original."
+            ),
+            DifficultyOption(
+                mode = 1,
+                icon = "⚔️",
+                title = "Difícil (Dano 2x Dobrado)",
+                tag = "DESAFIO",
+                tagColor = "#FFB300",
+                description = "Simon Belmont perde o dobro de vida a cada ataque, inimigo ou projétil sofrido. Exige cautela redobrada."
+            ),
+            DifficultyOption(
+                mode = 2,
+                icon = "💀",
+                title = "Pesadelo (Morte com 1 Golpe)",
+                tag = "EXTREMO",
+                tagColor = "#FF1744",
+                description = "Qualquer dano recebido é instantaneamente fatal! Desafio máximo estilo 'Hitless / One-Hit Death'."
+            )
+        )
+
+        var selectedDiff = prefs.getInt("opt_difficulty_mode", 0)
+        val optionViews = mutableListOf<Triple<View, TextView, TextView>>()
+
+        fun updateDiffSelection(mode: Int) {
+            selectedDiff = mode
+            prefs.edit().putInt("opt_difficulty_mode", mode).apply()
+            onDifficultyModeChangedListener?.invoke(mode)
+
+            for (i in options.indices) {
+                val opt = options[i]
+                val (card, checkView, titleV) = optionViews[i]
+                val isSel = opt.mode == mode
+
+                card.background = GradientDrawable().apply {
+                    if (isSel) {
+                        setColor(Color.parseColor("#28161A"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1.5f * dp1).toInt(), Color.parseColor("#FF5252"))
+                    } else {
+                        setColor(Color.parseColor("#0F111A"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1 * dp1).toInt(), Color.parseColor("#1F2232"))
+                    }
+                }
+
+                if (isSel) {
+                    checkView.text = "✔"
+                    checkView.setTextColor(Color.parseColor("#FF5252"))
+                    titleV.setTextColor(Color.parseColor("#FF8A80"))
+                } else {
+                    checkView.text = "○"
+                    checkView.setTextColor(Color.parseColor("#44475A"))
+                    titleV.setTextColor(Color.parseColor("#DDDDDD"))
+                }
+            }
+        }
+
+        for (opt in options) {
+            val isSel = opt.mode == selectedDiff
+
+            val card = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = (6 * dp1).toInt()
+                }
+                isClickable = true
+                isFocusable = true
+                setPadding((10 * dp1).toInt(), (8 * dp1).toInt(), (10 * dp1).toInt(), (8 * dp1).toInt())
+                background = GradientDrawable().apply {
+                    if (isSel) {
+                        setColor(Color.parseColor("#28161A"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1.5f * dp1).toInt(), Color.parseColor("#FF5252"))
+                    } else {
+                        setColor(Color.parseColor("#0F111A"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1 * dp1).toInt(), Color.parseColor("#1F2232"))
+                    }
+                }
+            }
+
+            val topRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+
+            val iconView = TextView(context).apply {
+                text = opt.icon
+                textSize = 14f
+                setPadding(0, 0, (6 * dp1).toInt(), 0)
+            }
+            topRow.addView(iconView)
+
+            val titleV = TextView(context).apply {
+                text = opt.title
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(if (isSel) Color.parseColor("#FF8A80") else Color.parseColor("#DDDDDD"))
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+            }
+            topRow.addView(titleV)
+
+            if (opt.tag != null) {
+                val tagV = TextView(context).apply {
+                    text = opt.tag
+                    textSize = 8.5f
+                    typeface = Typeface.DEFAULT_BOLD
+                    val colorHex = opt.tagColor ?: "#FF5252"
+                    setTextColor(Color.parseColor(colorHex))
+                    setPadding((5 * dp1).toInt(), (1 * dp1).toInt(), (5 * dp1).toInt(), (1 * dp1).toInt())
+                    background = GradientDrawable().apply {
+                        setColor(Color.parseColor("#201215"))
+                        cornerRadius = 3 * dp1
+                        setStroke((1 * dp1).toInt(), Color.parseColor(colorHex))
+                    }
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        rightMargin = (8 * dp1).toInt()
+                    }
+                }
+                topRow.addView(tagV)
+            }
+
+            val checkView = TextView(context).apply {
+                text = if (isSel) "✔" else "○"
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(if (isSel) Color.parseColor("#FF5252") else Color.parseColor("#44475A"))
+            }
+            topRow.addView(checkView)
+            card.addView(topRow)
+
+            val descV = TextView(context).apply {
+                text = opt.description
+                setTextColor(Color.parseColor("#A0A0B2"))
+                textSize = 10f
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    topMargin = (3 * dp1).toInt()
+                    leftMargin = (22 * dp1).toInt()
+                }
+            }
+            card.addView(descV)
+
+            card.setOnClickListener {
+                updateDiffSelection(opt.mode)
+                showStatus("Dificuldade definida: ${opt.title}")
+            }
+
+            optionViews.add(Triple(card, checkView, titleV))
+            container.addView(card)
+        }
+
+        return container
+    }
+
+    private fun createAiAggressionSection(dp1: Float): View {
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (12 * dp1).toInt()
+                topMargin = (2 * dp1).toInt()
+            }
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#151224"))
+                cornerRadius = 10 * dp1
+                setStroke((1 * dp1).toInt(), Color.parseColor("#322550"))
+            }
+            setPadding((12 * dp1).toInt(), (10 * dp1).toInt(), (12 * dp1).toInt(), (10 * dp1).toInt())
+        }
+
+        val headerLayout = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (8 * dp1).toInt()
+            }
+        }
+
+        val titleView = TextView(context).apply {
+            text = "⚡ COMPORTAMENTO TÁTICO DA IA"
+            setTextColor(Color.parseColor("#B388FF"))
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+        }
+        headerLayout.addView(titleView)
+        container.addView(headerLayout)
+
+        val subDesc = TextView(context).apply {
+            text = "Selecione o nível de agressividade e inteligência tática dos monstros:"
+            setTextColor(Color.parseColor("#9E9EAF"))
+            textSize = 10.5f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (8 * dp1).toInt()
+            }
+        }
+        container.addView(subDesc)
+
+        val options = listOf(
+            DifficultyOption(
+                mode = 1,
+                icon = "🎯",
+                title = "Tática Avançada (Equilibrada)",
+                tag = "INTELIGENTE",
+                tagColor = "#B388FF",
+                description = "Inimigos detectam chicotadas e saltam para esquivar, viram para perseguir Simon se ele pular por cima e aumentam o ritmo de disparo."
+            ),
+            DifficultyOption(
+                mode = 2,
+                icon = "🔥",
+                title = "Implacável (Predatória)",
+                tag = "INSANO",
+                tagColor = "#FF4081",
+                description = "Reflexos instantâneos de salto duplo, perseguição veloz em dobro quando Simon está por perto, cadência máxima de projéteis e emboscadas com saltos contínuos."
+            )
+        )
+
+        var selectedAggro = prefs.getInt("opt_smart_ai_aggression", 1)
+        val optionViews = mutableListOf<Triple<View, TextView, TextView>>()
+
+        fun updateAggroSelection(level: Int) {
+            selectedAggro = level
+            prefs.edit().putInt("opt_smart_ai_aggression", level).apply()
+            onSmartAiAggressionChangedListener?.invoke(level)
+
+            for (i in options.indices) {
+                val opt = options[i]
+                val (card, checkView, titleV) = optionViews[i]
+                val isSel = opt.mode == level
+
+                card.background = GradientDrawable().apply {
+                    if (isSel) {
+                        setColor(Color.parseColor("#261536"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1.5f * dp1).toInt(), Color.parseColor("#B388FF"))
+                    } else {
+                        setColor(Color.parseColor("#0F111A"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1 * dp1).toInt(), Color.parseColor("#1F2232"))
+                    }
+                }
+
+                if (isSel) {
+                    checkView.text = "✔"
+                    checkView.setTextColor(Color.parseColor("#B388FF"))
+                    titleV.setTextColor(Color.parseColor("#D1C4E9"))
+                } else {
+                    checkView.text = "○"
+                    checkView.setTextColor(Color.parseColor("#44475A"))
+                    titleV.setTextColor(Color.parseColor("#DDDDDD"))
+                }
+            }
+        }
+
+        for (opt in options) {
+            val isSel = opt.mode == selectedAggro
+
+            val card = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = (6 * dp1).toInt()
+                }
+                isClickable = true
+                isFocusable = true
+                setPadding((10 * dp1).toInt(), (8 * dp1).toInt(), (10 * dp1).toInt(), (8 * dp1).toInt())
+                background = GradientDrawable().apply {
+                    if (isSel) {
+                        setColor(Color.parseColor("#261536"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1.5f * dp1).toInt(), Color.parseColor("#B388FF"))
+                    } else {
+                        setColor(Color.parseColor("#0F111A"))
+                        cornerRadius = 8 * dp1
+                        setStroke((1 * dp1).toInt(), Color.parseColor("#1F2232"))
+                    }
+                }
+            }
+
+            val topRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+
+            val iconView = TextView(context).apply {
+                text = opt.icon
+                textSize = 14f
+                setPadding(0, 0, (6 * dp1).toInt(), 0)
+            }
+            topRow.addView(iconView)
+
+            val titleV = TextView(context).apply {
+                text = opt.title
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(if (isSel) Color.parseColor("#D1C4E9") else Color.parseColor("#DDDDDD"))
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+            }
+            topRow.addView(titleV)
+
+            if (opt.tag != null) {
+                val tagV = TextView(context).apply {
+                    text = opt.tag
+                    textSize = 8.5f
+                    typeface = Typeface.DEFAULT_BOLD
+                    val colorHex = opt.tagColor ?: "#B388FF"
+                    setTextColor(Color.parseColor(colorHex))
+                    setPadding((5 * dp1).toInt(), (1 * dp1).toInt(), (5 * dp1).toInt(), (1 * dp1).toInt())
+                    background = GradientDrawable().apply {
+                        setColor(Color.parseColor("#20122E"))
+                        cornerRadius = 3 * dp1
+                        setStroke((1 * dp1).toInt(), Color.parseColor(colorHex))
+                    }
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        rightMargin = (8 * dp1).toInt()
+                    }
+                }
+                topRow.addView(tagV)
+            }
+
+            val checkView = TextView(context).apply {
+                text = if (isSel) "✔" else "○"
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(if (isSel) Color.parseColor("#B388FF") else Color.parseColor("#44475A"))
+            }
+            topRow.addView(checkView)
+            card.addView(topRow)
+
+            val descV = TextView(context).apply {
+                text = opt.description
+                setTextColor(Color.parseColor("#A0A0B2"))
+                textSize = 10f
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    topMargin = (3 * dp1).toInt()
+                    leftMargin = (22 * dp1).toInt()
+                }
+            }
+            card.addView(descV)
+
+            card.setOnClickListener {
+                updateAggroSelection(opt.mode)
+                showStatus("Agressividade da IA: ${opt.title}")
+            }
+
+            optionViews.add(Triple(card, checkView, titleV))
+            container.addView(card)
+        }
+
+        return container
     }
 
     // =========================================================================
@@ -1865,7 +2586,7 @@ class SettingsOverlayView @JvmOverloads constructor(
     }
 
     fun showMenu() {
-        if (currentTab == 4) {
+        if (currentTab == 5) {
             refreshAchievementsAction?.invoke()
         }
         visibility = View.VISIBLE

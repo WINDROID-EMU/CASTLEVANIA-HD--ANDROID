@@ -202,6 +202,55 @@ class MainActivity : AppCompatActivity() {
         settingsView.onResetLayoutClickListener = {
             controllerView.resetLayout()
         }
+
+        // Gameplay Options & Cheats
+        settingsView.onInfiniteHealthChangedListener = { enabled ->
+            NativeBridge.nativeSetInfiniteHealth(enabled)
+        }
+
+        settingsView.onInfiniteHeartsChangedListener = { enabled ->
+            NativeBridge.nativeSetInfiniteHearts(enabled)
+        }
+
+        settingsView.onOneHitBossChangedListener = { enabled ->
+            NativeBridge.nativeSetOneHitBoss(enabled)
+        }
+
+        settingsView.onDifficultyModeChangedListener = { mode ->
+            NativeBridge.nativeSetDifficultyMode(mode)
+        }
+
+        settingsView.onDoubleJumpChangedListener = { enabled ->
+            NativeBridge.nativeSetDoubleJump(enabled)
+        }
+
+        settingsView.onLatchStairsChangedListener = { enabled ->
+            NativeBridge.nativeSetLatchStairs(enabled)
+        }
+
+        settingsView.onInfiniteLivesChangedListener = { enabled ->
+            NativeBridge.nativeSetInfiniteLives(enabled)
+        }
+
+        settingsView.onMaxWhipChangedListener = { enabled ->
+            NativeBridge.nativeSetMaxWhip(enabled)
+        }
+
+        settingsView.onTripleShotChangedListener = { enabled ->
+            NativeBridge.nativeSetTripleShot(enabled)
+        }
+
+        settingsView.onSmartEnemyAiChangedListener = { enabled ->
+            NativeBridge.nativeSetSmartEnemyAi(enabled)
+        }
+
+        settingsView.onSmartAiAggressionChangedListener = { level ->
+            NativeBridge.nativeSetSmartAiAggression(level)
+        }
+
+        settingsView.onCrossHeartRecoveryChangedListener = { enabled ->
+            NativeBridge.nativeSetCrossHeartRecovery(enabled)
+        }
     }
 
     private fun setupEditorCallbacks() {
@@ -327,6 +376,43 @@ class MainActivity : AppCompatActivity() {
         val opacity = prefs.getInt("opt_opacity", VirtualControllerView.DEFAULT_OPACITY_PERCENT) / 100.0f
         controllerView.controllerOpacity = opacity
         controllerView.isVibrationEnabled = prefs.getBoolean("opt_vibration", true)
+
+        // Gameplay Options & Cheats
+        val infHealth = prefs.getBoolean("opt_infinite_health", false)
+        NativeBridge.nativeSetInfiniteHealth(infHealth)
+
+        val infHearts = prefs.getBoolean("opt_infinite_hearts", false)
+        NativeBridge.nativeSetInfiniteHearts(infHearts)
+
+        val oneHitBoss = prefs.getBoolean("opt_one_hit_boss", false)
+        NativeBridge.nativeSetOneHitBoss(oneHitBoss)
+
+        val diffMode = prefs.getInt("opt_difficulty_mode", 0)
+        NativeBridge.nativeSetDifficultyMode(diffMode)
+
+        val doubleJump = prefs.getBoolean("opt_double_jump", true)
+        NativeBridge.nativeSetDoubleJump(doubleJump)
+
+        val latchStairs = prefs.getBoolean("opt_latch_stairs", true)
+        NativeBridge.nativeSetLatchStairs(latchStairs)
+
+        val infLives = prefs.getBoolean("opt_infinite_lives", false)
+        NativeBridge.nativeSetInfiniteLives(infLives)
+
+        val maxWhip = prefs.getBoolean("opt_max_whip", false)
+        NativeBridge.nativeSetMaxWhip(maxWhip)
+
+        val tripleShot = prefs.getBoolean("opt_triple_shot", false)
+        NativeBridge.nativeSetTripleShot(tripleShot)
+
+        val smartEnemyAi = prefs.getBoolean("opt_smart_enemy_ai", false)
+        NativeBridge.nativeSetSmartEnemyAi(smartEnemyAi)
+
+        val smartAiAggression = prefs.getInt("opt_smart_ai_aggression", 1)
+        NativeBridge.nativeSetSmartAiAggression(smartAiAggression)
+
+        val crossHeartRecovery = prefs.getBoolean("opt_cross_heart_recovery", true)
+        NativeBridge.nativeSetCrossHeartRecovery(crossHeartRecovery)
     }
 
     fun applyDisplayRefreshRate(targetHz: Float = 120.0f) {

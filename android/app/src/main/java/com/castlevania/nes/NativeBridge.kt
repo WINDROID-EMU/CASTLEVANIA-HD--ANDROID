@@ -171,4 +171,18 @@ object NativeBridge {
     external fun nativeRaGetUserInfoJson(): String
     external fun nativeRaGetAchievementsJson(): String
     external fun nativeProcessServerResponse(callbackPtr: Long, callbackDataPtr: Long, httpStatus: Int, body: String)
+
+    // Gameplay Features & Cheats
+    external fun nativeSetInfiniteHealth(enable: Boolean)
+    external fun nativeSetInfiniteHearts(enable: Boolean)
+    external fun nativeSetOneHitBoss(enable: Boolean)
+    external fun nativeSetDifficultyMode(mode: Int)
+    external fun nativeSetDoubleJump(enable: Boolean)
+    external fun nativeSetInfiniteLives(enable: Boolean)
+    external fun nativeSetMaxWhip(enable: Boolean)
+    external fun nativeSetTripleShot(enable: Boolean)
+    external fun nativeSetSmartEnemyAi(enable: Boolean)
+    external fun nativeSetSmartAiAggression(level: Int)
+    external fun nativeSetLatchStairs(enable: Boolean)
+    external fun nativeSetCrossHeartRecovery(enable: Boolean)
 }
