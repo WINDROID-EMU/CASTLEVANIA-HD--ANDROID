@@ -57,10 +57,6 @@ static std::atomic<bool> g_featureDoubleJump{false};
 static std::atomic<bool> g_cheatInfiniteLives{false};
 static std::atomic<bool> g_cheatMaxWhip{false};
 static std::atomic<bool> g_cheatTripleShot{false};
-static std::atomic<bool> g_smartEnemyAi{false};
-static std::atomic<int>  g_smartAiAggression{1}; // 1 = Avançada, 2 = Implacável
-static std::atomic<bool> g_featureLatchStairs{true}; // Agarrar escadas no ar ao segurar CIMA e pular para sair dela
-static std::atomic<bool> g_featureCrossHeartRecovery{true}; // Recuperar coração ao pegar a Cruz Bumerangue de volta
 
 void ProcessGameplayFrame();
 
@@ -224,7 +220,6 @@ private:
     std::atomic<uint32_t> _buttonMask{0};
     bool _hasDoubleJumped = false;
     bool _prevBtnA = false;
-    int _stairCooldown = 0;
 
 public:
     void SetButtons(uint32_t buttons)
@@ -262,30 +257,30 @@ public:
                 btnSel = true;
             }
 
-            bool isHardcore = false;
-            {
-                std::lock_guard<std::recursive_mutex> lock(g_rcMutex);
-                if (g_rcClient && rc_client_get_hardcore_enabled(g_rcClient)) {
-                    isHardcore = true;
+            // Pulo Duplo no Ar (Double Jump)
+            if (g_featureDoubleJump.load()) {
+                bool isHardcore = false;
+                {
+                    std::lock_guard<std::recursive_mutex> lock(g_rcMutex);
+                    if (g_rcClient && rc_client_get_hardcore_enabled(g_rcClient)) {
+                        isHardcore = true;
+                    }
                 }
-            }
+                if (!isHardcore && g_emu) {
+                    shared_ptr<IConsole> console = g_emu->GetConsole();
+                    if (console) {
+                        NesConsole* nesConsole = static_cast<NesConsole*>(console.get());
+                        if (nesConsole && nesConsole->GetMemoryManager()) {
+                            uint8_t* ram = nesConsole->GetMemoryManager()->GetInternalRam();
+                            if (ram) {
+                                uint8_t simonState = ram[0x046C]; // 0 = no chão, >0 = no ar
+                                uint8_t stunTimer = ram[0x0047];  // stun/dano
 
-            if (!isHardcore && g_emu) {
-                shared_ptr<IConsole> console = g_emu->GetConsole();
-                if (console) {
-                    NesConsole* nesConsole = static_cast<NesConsole*>(console.get());
-                    if (nesConsole && nesConsole->GetMemoryManager()) {
-                        uint8_t* ram = nesConsole->GetMemoryManager()->GetInternalRam();
-                        if (ram) {
-                            uint8_t simonState = ram[0x046C]; // 0 = chão, >0 = no ar/outros
-                            uint8_t stunTimer = ram[0x0047];  // stun/dano
-
-                            // 1. Pulo Duplo no Ar (Double Jump)
-                            if (g_featureDoubleJump.load()) {
                                 if (simonState == 0) {
                                     _hasDoubleJumped = false;
                                 } else if (simonState > 0 && stunTimer == 0 && !_hasDoubleJumped) {
                                     if (btnA && !_prevBtnA) {
+                                        // Executa o pulo duplo no ar!
                                         ram[0x04DC] = 0xFB; // -5 velocidade vertical para cima (pulo completo)
                                         ram[0x04F8] = 0x80;
                                         if (btnLeft) {
@@ -295,133 +290,6 @@ public:
                                         }
                                         _hasDoubleJumped = true;
                                         LOGI("Pulo Duplo executado com sucesso! simonState=%d", simonState);
-                                    }
-                                }
-                            }
-
-                            // 2. Mecânica de Escadas Avançada (Agarrar no Ar ao Pular & Pular para Sair)
-                            if (g_featureLatchStairs.load()) {
-                                if (_stairCooldown > 0) {
-                                    _stairCooldown--;
-                                }
-
-                                // A) Pular para sair da escada (Jump off stairs)
-                                if (simonState == 4) { // 4 = State: STAIRS
-                                    if (btnA && !_prevBtnA) {
-                                        ram[0x046C] = 3;    // Estado de Pulo no ar
-                                        ram[0x003E] = 0;    // Fora da escada
-                                        ram[0x04DC] = 0xFB; // Impulso vertical para cima (-5)
-                                        ram[0x04F8] = 0x80;
-                                        ram[0x054C] = 0;
-                                        if (btnLeft) {
-                                            ram[0x0450] = 0xFF; // Salto para a esquerda
-                                            ram[0x04A4] = 0;
-                                        } else if (btnRight) {
-                                            ram[0x0450] = 0x01; // Salto para a direita
-                                            ram[0x04A4] = 1;
-                                        } else {
-                                            ram[0x0450] = (ram[0x04A4] == 1) ? 0x01 : 0xFF;
-                                        }
-                                        _stairCooldown = 18; // Cooldown de frames para não re-agarrar no mesmo salto
-                                        LOGI("Simon saltou para fora da escada!");
-                                    }
-                                }
-                                // B) Agarrar na escada no ar (Mid-Air Stair Latch ao segurar CIMA ou BAIXO)
-                                else if (_stairCooldown == 0 && (btnUp || btnDown) && (simonState == 1 || simonState == 3 || simonState == 7)) {
-                                    // Verificar se Simon está vivo, não está atordoado e está em gameplay normal
-                                    if (ram[0x0045] > 0 && stunTimer == 0 && ram[0x054C] == 0 && ram[0x0018] == 5) {
-                                        uint8_t simonY = ram[0x003F];
-                                        uint16_t simonX = (uint16_t)ram[0x0040] | ((uint16_t)ram[0x0041] << 8);
-                                        uint8_t currentStage = ram[0x0028];
-                                        uint8_t currentSubstage = ram[0x0046] & 0x01;
-
-                                        // Ler ponteiro de escadas da fase atual (Tabela mestre no endereço 0xFBC8)
-                                        uint16_t stairTablePtr = nesConsole->GetMemoryManager()->DebugReadWord(0xFBC8 + currentStage * 2);
-                                        if (stairTablePtr >= 0x8000 && stairTablePtr < 0xC000) {
-                                            uint16_t curr = stairTablePtr;
-                                            bool latched = false;
-                                            while (!latched) {
-                                                uint8_t b0 = nesConsole->GetMemoryManager()->DebugRead(curr);
-                                                if (b0 == 0) break; // Fim da tabela de escadas da fase
-                                                uint8_t b1 = nesConsole->GetMemoryManager()->DebugRead(curr + 1);
-                                                curr += 2;
-
-                                                uint8_t dir = b0 & 0x03;
-                                                uint8_t flr = (b0 >> 2) & 0x01;
-                                                if (flr != currentSubstage) continue;
-
-                                                // Se estiver segurando CIMA: procura escadas subindo (dir 0 ou 1)
-                                                // Se estiver segurando BAIXO: procura escadas descendo (dir 2 ou 3)
-                                                if (btnUp && dir > 1) continue;
-                                                if (btnDown && !btnUp && dir < 2) continue;
-
-                                                int y0 = b0 & 0xF0;
-                                                int xl = b1 & 0xF8;
-                                                int xh = b1 & 0x07;
-                                                static const int xAdj[4] = {0, -1, 5, 2};
-                                                int x0 = ((xh << 8) | xl) + xAdj[dir];
-
-                                                // Calcular alinhamento na diagonal de 45 graus da escada
-                                                int dy = 0;
-                                                int expectedX = 0;
-                                                if (dir == 0) { // Subindo para a direita (Up-Right)
-                                                    dy = y0 - (int)simonY;
-                                                    expectedX = x0 + dy;
-                                                } else if (dir == 1) { // Subindo para a esquerda (Up-Left)
-                                                    dy = y0 - (int)simonY;
-                                                    expectedX = x0 - dy;
-                                                } else if (dir == 2) { // Descendo para a direita (Down-Right)
-                                                    dy = (int)simonY - y0;
-                                                    expectedX = x0 + dy;
-                                                } else if (dir == 3) { // Descendo para a esquerda (Down-Left)
-                                                    dy = (int)simonY - y0;
-                                                    expectedX = x0 - dy;
-                                                }
-
-                                                // Se Simon estiver na extensão vertical da escada e interceptando a linha
-                                                if (dy >= 4 && dy <= 128 && std::abs((int)simonX - expectedX) <= 12) {
-                                                    // Ponto de degrau mais próximo (múltiplos de 8 pixels)
-                                                    int step = (dy + 4) / 8;
-                                                    if (step < 1) step = 1;
-
-                                                    int snappedY = (dir <= 1) ? (y0 - step * 8) : (y0 + step * 8);
-                                                    int snappedX = (dir == 0) ? (x0 + step * 8) :
-                                                                   (dir == 1) ? (x0 - step * 8) :
-                                                                   (dir == 2) ? (x0 + step * 8) : (x0 - step * 8);
-
-                                                    // Atualizar coordenadas físicas na RAM
-                                                    ram[0x003F] = (uint8_t)snappedY;
-                                                    ram[0x0040] = (uint8_t)(snappedX & 0xFF);
-                                                    ram[0x0041] = (uint8_t)((snappedX >> 8) & 0xFF);
-
-                                                    // Atualizar coordenadas de câmera e renderização do sprite
-                                                    uint16_t camX = (uint16_t)ram[0x002E] | ((uint16_t)ram[0x002F] << 8);
-                                                    ram[0x038C] = (uint8_t)(snappedX - camX);
-                                                    ram[0x03C4] = ram[0x038C];
-                                                    ram[0x03E0] = (uint8_t)snappedY;
-
-                                                    // Configurar Simon no estado de Escada ativo
-                                                    ram[0x046C] = 4; // State 4 = STAIRS (na escada)
-                                                    ram[0x003E] = 1; // Flag on-stairs
-                                                    ram[0x04C0] = dir;
-                                                    ram[0x04A4] = (dir & 0x01) ? 0 : 1; // 0 = esquerda, 1 = direita
-                                                    ram[0x0450] = 0;
-                                                    ram[0x04DC] = 0xA2;
-                                                    ram[0x04F8] = 0;
-                                                    ram[0x0049] = 0;
-                                                    ram[0x0052] = 0;
-                                                    ram[0x054C] = 0;
-                                                    ram[0x0434] = 0;
-                                                    ram[0x0584] = 0;
-                                                    ram[0x0514] = (dir << 1) + ram[0x04A4];
-
-                                                    _stairCooldown = 15;
-                                                    latched = true;
-                                                    LOGI("Simon se agarrou na escada no ar! dir=%d, pos=(%d, %d), step=%d",
-                                                         dir, snappedX, snappedY, step);
-                                                }
-                                            }
-                                        }
                                     }
                                 }
                             }
@@ -575,143 +443,6 @@ void ProcessGameplayFrame()
     if (g_cheatInfiniteLives.load()) {
         if (ram[0x002A] < 9) {
             ram[0x002A] = 9;
-        }
-    }
-
-    // 8. Inteligência Artificial dos Inimigos Mais Esperta (Smart Enemy AI)
-    if (g_smartEnemyAi.load()) {
-        uint8_t simonX = ram[0x03C4];
-        uint8_t simonY = ram[0x03E0];
-        uint8_t simonFacing = ram[0x04A4]; // 0 = esquerda, 1 = direita
-        uint8_t whipState = ram[0x046C + 1]; // Chicote ativo no slot 1
-        bool subweaponActive = (ram[0x046C + 2] > 0 || ram[0x046C + 3] > 0 || ram[0x046C + 4] > 0);
-        bool simonAttacking = (whipState > 0 || subweaponActive);
-
-        uint8_t frameCounter = ram[0x001A]; // Contador de frames interno do NES
-        int aggression = g_smartAiAggression.load(); // 1 = Avançada, 2 = Implacável
-
-        // Iterar sobre os slots de entidades de inimigos (slots 8 a 23)
-        for (int i = 8; i < 24; i++) {
-            uint8_t entityType = ram[0x031C + i];
-            uint8_t entityState = ram[0x046C + i];
-
-            // Pular slots vazios, inativos ou em animação de morte/explosão
-            if (entityType == 0 || entityState == 0 || entityState >= 8) {
-                continue;
-            }
-
-            uint8_t enemyX = ram[0x03C4 + i];
-            uint8_t enemyY = ram[0x03E0 + i];
-            int dx = (int)simonX - (int)enemyX;
-            int dy = (int)simonY - (int)enemyY;
-            int absDx = std::abs(dx);
-            int absDy = std::abs(dy);
-
-            // A) REAÇÃO E ESQUIVA INTELIGENTE A ATAQUES DE SIMON (CHICOTE & SUB-ARMAS)
-            if (simonAttacking && absDx <= (aggression == 2 ? 85 : 68) && absDy <= 28) {
-                // Verificar se Simon está voltado em direção ao inimigo
-                bool simonFacingEnemy = (simonFacing != 0 && dx < 0) || (simonFacing == 0 && dx > 0);
-                if (simonFacingEnemy) {
-                    uint8_t enemyYVel = ram[0x04DC + i];
-                    if (enemyYVel == 0) {
-                        // Salto de esquiva com reflexo rápido por cima da chicotada
-                        ram[0x04DC + i] = (aggression == 2) ? 0xFA : 0xFC; // Impulso vertical para cima
-                        ram[0x04F8 + i] = 0x80;
-                        // Recuo tático oposto ao ataque
-                        if (dx > 0) {
-                            ram[0x0450 + i] = 0xFF; // Recua para a esquerda
-                            ram[0x04A4 + i] = 0;
-                        } else {
-                            ram[0x0450 + i] = 0x01; // Recua para a direita
-                            ram[0x04A4 + i] = 1;
-                        }
-                    }
-                }
-            }
-
-            // B) RASTREAMENTO INTELIGENTE & PERSEGUIÇÃO DE FLANCO
-            // Inimigos não continuam andando para longe se Simon saltar para trás deles
-            if (!simonAttacking && absDx >= 18 && absDx <= 180 && absDy <= 64) {
-                int tickInterval = (aggression == 2) ? 16 : 28;
-                if ((frameCounter + (i * 3)) % tickInterval == 0) {
-                    if (dx > 20) {
-                        // Simon está à direita: virar e perseguir para a direita
-                        ram[0x04A4 + i] = 1; // Face right
-                        uint8_t spd = ram[0x0450 + i];
-                        if (spd == 0xFF || spd == 0) {
-                            ram[0x0450 + i] = (aggression == 2 && absDx < 90) ? 0x02 : 0x01;
-                        }
-                    } else if (dx < -20) {
-                        // Simon está à esquerda: virar e perseguir para a esquerda
-                        ram[0x04A4 + i] = 0; // Face left
-                        uint8_t spd = ram[0x0450 + i];
-                        if (spd == 0x01 || spd == 0) {
-                            ram[0x0450 + i] = (aggression == 2 && absDx < 90) ? 0xFE : 0xFF;
-                        }
-                    }
-                }
-            }
-
-            // C) CADÊNCIA AGRESSIVA DE DISPARO DE PROJÉTEIS
-            // Esqueletos com ossos, Cavaleiros com machados e Pilares de fogo atacam com mais prontidão
-            if (absDx < 130 && absDy < 50) {
-                uint8_t timer = ram[0x0488 + i];
-                if (timer > (aggression == 2 ? 4 : 8)) {
-                    ram[0x0488 + i] = timer - 1; // Acelera o cooldown de projéteis
-                }
-            }
-
-            // D) EMBOSCADA DE SALTO (BOTE DO PREDADOR)
-            // Panteras, corcundas e esqueletos saltadores dão bote ao aproximar
-            if (absDx >= 35 && absDx <= 95 && absDy <= 20) {
-                uint8_t enemyYVel = ram[0x04DC + i];
-                int pounceInterval = (aggression == 2) ? 40 : 60;
-                if (enemyYVel == 0 && (frameCounter + i * 5) % pounceInterval == 0) {
-                    ram[0x04DC + i] = 0xFB; // Salto parabólico em direção ao Simon
-                    ram[0x04F8 + i] = 0x80;
-                    ram[0x0450 + i] = (dx > 0) ? 0x01 : 0xFF;
-                    ram[0x04A4 + i] = (dx > 0) ? 1 : 0;
-                }
-            }
-        }
-    }
-
-    // 9. Recuperar Coração com a Cruz Bumerangue ao Pegá-la de Volta
-    if (g_featureCrossHeartRecovery.load()) {
-        static bool s_crossActive[3] = {false, false, false};
-        static uint8_t s_lastCrossX[3] = {0, 0, 0};
-        static uint8_t s_lastCrossY[3] = {0, 0, 0};
-
-        uint8_t simonX = ram[0x03C4];
-        uint8_t simonY = ram[0x03E0];
-
-        for (int idx = 0; idx < 3; idx++) {
-            int slot = 20 + idx; // Slots de sub-arma: 20, 21, 22 (0x14, 0x15, 0x16)
-            uint8_t subType = ram[0x04C0 + slot];
-            uint8_t subActive = ram[0x0434 + slot];
-            uint8_t subX = ram[0x03C4 + slot];
-            uint8_t subY = ram[0x03E0 + slot];
-
-            bool isCross = (subType == 0x40) || (ram[0x015B] == 0x0B && subActive > 0);
-
-            if (isCross && subActive > 0) {
-                s_crossActive[idx] = true;
-                s_lastCrossX[idx] = subX;
-                s_lastCrossY[idx] = subY;
-            } else if (s_crossActive[idx] && subActive == 0) {
-                // A cruz desapareceu neste frame. Verificar se Simon a capturou de volta
-                int dx = std::abs((int)simonX - (int)s_lastCrossX[idx]);
-                int dy = std::abs((int)simonY - (int)s_lastCrossY[idx]);
-
-                // Captura próxima ao corpo de Simon
-                if (dx <= 24 && dy <= 32) {
-                    if (ram[0x0071] < 99) {
-                        ram[0x0071]++;
-                        LOGI("Cruz Bumerangue capturada no retorno! +1 Coracao devolvido (total: %d)", ram[0x0071]);
-                    }
-                }
-                s_crossActive[idx] = false;
-            }
         }
     }
 }
@@ -1517,34 +1248,6 @@ Java_com_castlevania_nes_NativeBridge_nativeSetTripleShot(JNIEnv* env, jclass cl
 {
     g_cheatTripleShot.store(enable);
     LOGI("Native cheat Triple Shot set to: %d", (int)enable);
-}
-
-JNIEXPORT void JNICALL
-Java_com_castlevania_nes_NativeBridge_nativeSetSmartEnemyAi(JNIEnv* env, jclass clazz, jboolean enable)
-{
-    g_smartEnemyAi.store(enable);
-    LOGI("Native Smart Enemy AI set to: %d", (int)enable);
-}
-
-JNIEXPORT void JNICALL
-Java_com_castlevania_nes_NativeBridge_nativeSetSmartAiAggression(JNIEnv* env, jclass clazz, jint level)
-{
-    g_smartAiAggression.store(level);
-    LOGI("Native Smart AI Aggression level set to: %d", (int)level);
-}
-
-JNIEXPORT void JNICALL
-Java_com_castlevania_nes_NativeBridge_nativeSetLatchStairs(JNIEnv* env, jclass clazz, jboolean enable)
-{
-    g_featureLatchStairs.store(enable);
-    LOGI("Native Latch Stairs feature set to: %d", (int)enable);
-}
-
-JNIEXPORT void JNICALL
-Java_com_castlevania_nes_NativeBridge_nativeSetCrossHeartRecovery(JNIEnv* env, jclass clazz, jboolean enable)
-{
-    g_featureCrossHeartRecovery.store(enable);
-    LOGI("Native Cross Heart Recovery feature set to: %d", (int)enable);
 }
 
 }

@@ -50,13 +50,9 @@ class SettingsOverlayView @JvmOverloads constructor(
     var onOneHitBossChangedListener: ((enabled: Boolean) -> Unit)? = null
     var onDifficultyModeChangedListener: ((mode: Int) -> Unit)? = null
     var onDoubleJumpChangedListener: ((enabled: Boolean) -> Unit)? = null
-    var onLatchStairsChangedListener: ((enabled: Boolean) -> Unit)? = null
     var onInfiniteLivesChangedListener: ((enabled: Boolean) -> Unit)? = null
     var onMaxWhipChangedListener: ((enabled: Boolean) -> Unit)? = null
     var onTripleShotChangedListener: ((enabled: Boolean) -> Unit)? = null
-    var onSmartEnemyAiChangedListener: ((enabled: Boolean) -> Unit)? = null
-    var onSmartAiAggressionChangedListener: ((level: Int) -> Unit)? = null
-    var onCrossHeartRecoveryChangedListener: ((enabled: Boolean) -> Unit)? = null
 
     private var refreshRateBadge: TextView? = null
     private var detectedDisplayHzText: TextView? = null
@@ -163,49 +159,36 @@ class SettingsOverlayView @JvmOverloads constructor(
         mainContainer.addView(headerLayout)
 
         // --- 2. TAB BAR ---
-        val tabScroll = HorizontalScrollView(context).apply {
-            isHorizontalScrollBarEnabled = false
-            isFillViewport = true
+        val tabBar = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (38 * dp1).toInt()
+                (36 * dp1).toInt()
             ).apply {
                 bottomMargin = (10 * dp1).toInt()
             }
-        }
-
-        val tabBar = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#0C0D13"))
                 cornerRadius = 8 * dp1
             }
             setPadding((3 * dp1).toInt(), (3 * dp1).toInt(), (3 * dp1).toInt(), (3 * dp1).toInt())
         }
-        tabScroll.addView(tabBar)
 
         val tabTitles = listOf("🕹️ Gameplayer", "💾 Estados", "🖥️ Vídeo", "🎧 Áudio", "🎮 Controles", "🏆 Conquistas")
         for (i in tabTitles.indices) {
             val btnTab = Button(context).apply {
                 text = tabTitles[i]
-                textSize = 11f
+                textSize = 10.5f
                 typeface = Typeface.DEFAULT_BOLD
                 isAllCaps = false
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.MATCH_PARENT
-                )
-                setPadding((12 * dp1).toInt(), 0, (12 * dp1).toInt(), 0)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f)
+                setPadding(0, 0, 0, 0)
                 setOnClickListener { selectTab(i) }
             }
             tabButtons.add(btnTab)
             tabBar.addView(btnTab)
         }
-        mainContainer.addView(tabScroll)
+        mainContainer.addView(tabBar)
 
         // Status banner
         statusMessageView = TextView(context).apply {
@@ -420,51 +403,11 @@ class SettingsOverlayView @JvmOverloads constructor(
         }
         layout.addView(swDoubleJump)
 
-        // 4.1 Subir na Escada no Ar (Mid-Air Stair Grab / Latch)
-        val isLatchStairs = prefs.getBoolean("opt_latch_stairs", true)
-        val swLatchStairs = createSwitchRow(
-            dp1,
-            "🪜 Agarrar Escadas no Ar (Subir no Salto)",
-            "Pule em qualquer altura ou metade da escada segurando CIMA para se agarrar e subir como se viesse do início. Pressione Pulo (A) na escada para saltar fora dela",
-            isLatchStairs
-        ) { checked ->
-            prefs.edit().putBoolean("opt_latch_stairs", checked).apply()
-            onLatchStairsChangedListener?.invoke(checked)
-            showStatus(if (checked) "Agarrar Escadas no Ar ATIVADO!" else "Agarrar Escadas no Ar desativado")
-        }
-        layout.addView(swLatchStairs)
-
         // --- SEÇÃO 3: AUMENTAR A DIFICULDADE DO JOGO ---
         val diffSection = createDifficultySection(dp1)
         layout.addView(diffSection)
 
-        // --- SEÇÃO 4: INTELIGÊNCIA ARTIFICIAL DOS INIMIGOS ---
-        val secAiHeader = TextView(context).apply {
-            text = "🧠 INTELIGÊNCIA ARTIFICIAL DOS INIMIGOS (SMART AI)"
-            setTextColor(Color.parseColor("#B388FF"))
-            textSize = 12f
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, (6 * dp1).toInt(), 0, (6 * dp1).toInt())
-        }
-        layout.addView(secAiHeader)
-
-        val isSmartAi = prefs.getBoolean("opt_smart_enemy_ai", false)
-        val swSmartAi = createSwitchRow(
-            dp1,
-            "🧠 IA dos Inimigos Mais Esperta (Smart AI)",
-            "Inimigos esquivam de chicotadas pulando, rastreiam e perseguem Simon pelas costas, aumentam cadência de ataque e emboscam",
-            isSmartAi
-        ) { checked ->
-            prefs.edit().putBoolean("opt_smart_enemy_ai", checked).apply()
-            onSmartEnemyAiChangedListener?.invoke(checked)
-            showStatus(if (checked) "IA Inteligente dos Inimigos ATIVADA!" else "IA dos Inimigos restaurada ao padrão original")
-        }
-        layout.addView(swSmartAi)
-
-        val aiAggressionSection = createAiAggressionSection(dp1)
-        layout.addView(aiAggressionSection)
-
-        // --- SEÇÃO 5: BÔNUS & ARMAS ---
+        // --- SEÇÃO 4: BÔNUS & ARMAS ---
         val secBonusHeader = TextView(context).apply {
             text = "⚔️ UPGRADES E POTENCIALIZADORES"
             setTextColor(Color.parseColor("#B0BEC5"))
@@ -515,20 +458,6 @@ class SettingsOverlayView @JvmOverloads constructor(
             showStatus(if (checked) "Vidas Infinitas ATIVADAS!" else "Vidas Infinitas desativadas")
         }
         layout.addView(swLives)
-
-        // 8. Recuperar Coração com a Cruz Bumerangue
-        val isCrossRecovery = prefs.getBoolean("opt_cross_heart_recovery", true)
-        val swCrossRecovery = createSwitchRow(
-            dp1,
-            "🪃 Recuperar Coração ao Pegar a Cruz Bumerangue",
-            "Ao lançar a cruz e interceptá-la de volta no retorno, recupera automaticamente o coração que foi gasto ao jogá-la",
-            isCrossRecovery
-        ) { checked ->
-            prefs.edit().putBoolean("opt_cross_heart_recovery", checked).apply()
-            onCrossHeartRecoveryChangedListener?.invoke(checked)
-            showStatus(if (checked) "Recuperação de Coração da Cruz ATIVADA!" else "Recuperação de Coração desativada")
-        }
-        layout.addView(swCrossRecovery)
 
         return scroll
     }
@@ -759,224 +688,6 @@ class SettingsOverlayView @JvmOverloads constructor(
             card.setOnClickListener {
                 updateDiffSelection(opt.mode)
                 showStatus("Dificuldade definida: ${opt.title}")
-            }
-
-            optionViews.add(Triple(card, checkView, titleV))
-            container.addView(card)
-        }
-
-        return container
-    }
-
-    private fun createAiAggressionSection(dp1: Float): View {
-        val container = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = (12 * dp1).toInt()
-                topMargin = (2 * dp1).toInt()
-            }
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#151224"))
-                cornerRadius = 10 * dp1
-                setStroke((1 * dp1).toInt(), Color.parseColor("#322550"))
-            }
-            setPadding((12 * dp1).toInt(), (10 * dp1).toInt(), (12 * dp1).toInt(), (10 * dp1).toInt())
-        }
-
-        val headerLayout = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = (8 * dp1).toInt()
-            }
-        }
-
-        val titleView = TextView(context).apply {
-            text = "⚡ COMPORTAMENTO TÁTICO DA IA"
-            setTextColor(Color.parseColor("#B388FF"))
-            textSize = 12f
-            typeface = Typeface.DEFAULT_BOLD
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
-        }
-        headerLayout.addView(titleView)
-        container.addView(headerLayout)
-
-        val subDesc = TextView(context).apply {
-            text = "Selecione o nível de agressividade e inteligência tática dos monstros:"
-            setTextColor(Color.parseColor("#9E9EAF"))
-            textSize = 10.5f
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = (8 * dp1).toInt()
-            }
-        }
-        container.addView(subDesc)
-
-        val options = listOf(
-            DifficultyOption(
-                mode = 1,
-                icon = "🎯",
-                title = "Tática Avançada (Equilibrada)",
-                tag = "INTELIGENTE",
-                tagColor = "#B388FF",
-                description = "Inimigos detectam chicotadas e saltam para esquivar, viram para perseguir Simon se ele pular por cima e aumentam o ritmo de disparo."
-            ),
-            DifficultyOption(
-                mode = 2,
-                icon = "🔥",
-                title = "Implacável (Predatória)",
-                tag = "INSANO",
-                tagColor = "#FF4081",
-                description = "Reflexos instantâneos de salto duplo, perseguição veloz em dobro quando Simon está por perto, cadência máxima de projéteis e emboscadas com saltos contínuos."
-            )
-        )
-
-        var selectedAggro = prefs.getInt("opt_smart_ai_aggression", 1)
-        val optionViews = mutableListOf<Triple<View, TextView, TextView>>()
-
-        fun updateAggroSelection(level: Int) {
-            selectedAggro = level
-            prefs.edit().putInt("opt_smart_ai_aggression", level).apply()
-            onSmartAiAggressionChangedListener?.invoke(level)
-
-            for (i in options.indices) {
-                val opt = options[i]
-                val (card, checkView, titleV) = optionViews[i]
-                val isSel = opt.mode == level
-
-                card.background = GradientDrawable().apply {
-                    if (isSel) {
-                        setColor(Color.parseColor("#261536"))
-                        cornerRadius = 8 * dp1
-                        setStroke((1.5f * dp1).toInt(), Color.parseColor("#B388FF"))
-                    } else {
-                        setColor(Color.parseColor("#0F111A"))
-                        cornerRadius = 8 * dp1
-                        setStroke((1 * dp1).toInt(), Color.parseColor("#1F2232"))
-                    }
-                }
-
-                if (isSel) {
-                    checkView.text = "✔"
-                    checkView.setTextColor(Color.parseColor("#B388FF"))
-                    titleV.setTextColor(Color.parseColor("#D1C4E9"))
-                } else {
-                    checkView.text = "○"
-                    checkView.setTextColor(Color.parseColor("#44475A"))
-                    titleV.setTextColor(Color.parseColor("#DDDDDD"))
-                }
-            }
-        }
-
-        for (opt in options) {
-            val isSel = opt.mode == selectedAggro
-
-            val card = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    bottomMargin = (6 * dp1).toInt()
-                }
-                isClickable = true
-                isFocusable = true
-                setPadding((10 * dp1).toInt(), (8 * dp1).toInt(), (10 * dp1).toInt(), (8 * dp1).toInt())
-                background = GradientDrawable().apply {
-                    if (isSel) {
-                        setColor(Color.parseColor("#261536"))
-                        cornerRadius = 8 * dp1
-                        setStroke((1.5f * dp1).toInt(), Color.parseColor("#B388FF"))
-                    } else {
-                        setColor(Color.parseColor("#0F111A"))
-                        cornerRadius = 8 * dp1
-                        setStroke((1 * dp1).toInt(), Color.parseColor("#1F2232"))
-                    }
-                }
-            }
-
-            val topRow = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-            }
-
-            val iconView = TextView(context).apply {
-                text = opt.icon
-                textSize = 14f
-                setPadding(0, 0, (6 * dp1).toInt(), 0)
-            }
-            topRow.addView(iconView)
-
-            val titleV = TextView(context).apply {
-                text = opt.title
-                textSize = 12f
-                typeface = Typeface.DEFAULT_BOLD
-                setTextColor(if (isSel) Color.parseColor("#D1C4E9") else Color.parseColor("#DDDDDD"))
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
-            }
-            topRow.addView(titleV)
-
-            if (opt.tag != null) {
-                val tagV = TextView(context).apply {
-                    text = opt.tag
-                    textSize = 8.5f
-                    typeface = Typeface.DEFAULT_BOLD
-                    val colorHex = opt.tagColor ?: "#B388FF"
-                    setTextColor(Color.parseColor(colorHex))
-                    setPadding((5 * dp1).toInt(), (1 * dp1).toInt(), (5 * dp1).toInt(), (1 * dp1).toInt())
-                    background = GradientDrawable().apply {
-                        setColor(Color.parseColor("#20122E"))
-                        cornerRadius = 3 * dp1
-                        setStroke((1 * dp1).toInt(), Color.parseColor(colorHex))
-                    }
-                    layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                    ).apply {
-                        rightMargin = (8 * dp1).toInt()
-                    }
-                }
-                topRow.addView(tagV)
-            }
-
-            val checkView = TextView(context).apply {
-                text = if (isSel) "✔" else "○"
-                textSize = 14f
-                typeface = Typeface.DEFAULT_BOLD
-                setTextColor(if (isSel) Color.parseColor("#B388FF") else Color.parseColor("#44475A"))
-            }
-            topRow.addView(checkView)
-            card.addView(topRow)
-
-            val descV = TextView(context).apply {
-                text = opt.description
-                setTextColor(Color.parseColor("#A0A0B2"))
-                textSize = 10f
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    topMargin = (3 * dp1).toInt()
-                    leftMargin = (22 * dp1).toInt()
-                }
-            }
-            card.addView(descV)
-
-            card.setOnClickListener {
-                updateAggroSelection(opt.mode)
-                showStatus("Agressividade da IA: ${opt.title}")
             }
 
             optionViews.add(Triple(card, checkView, titleV))

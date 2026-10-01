@@ -224,10 +224,6 @@ class MainActivity : AppCompatActivity() {
             NativeBridge.nativeSetDoubleJump(enabled)
         }
 
-        settingsView.onLatchStairsChangedListener = { enabled ->
-            NativeBridge.nativeSetLatchStairs(enabled)
-        }
-
         settingsView.onInfiniteLivesChangedListener = { enabled ->
             NativeBridge.nativeSetInfiniteLives(enabled)
         }
@@ -238,18 +234,6 @@ class MainActivity : AppCompatActivity() {
 
         settingsView.onTripleShotChangedListener = { enabled ->
             NativeBridge.nativeSetTripleShot(enabled)
-        }
-
-        settingsView.onSmartEnemyAiChangedListener = { enabled ->
-            NativeBridge.nativeSetSmartEnemyAi(enabled)
-        }
-
-        settingsView.onSmartAiAggressionChangedListener = { level ->
-            NativeBridge.nativeSetSmartAiAggression(level)
-        }
-
-        settingsView.onCrossHeartRecoveryChangedListener = { enabled ->
-            NativeBridge.nativeSetCrossHeartRecovery(enabled)
         }
     }
 
@@ -393,9 +377,6 @@ class MainActivity : AppCompatActivity() {
         val doubleJump = prefs.getBoolean("opt_double_jump", true)
         NativeBridge.nativeSetDoubleJump(doubleJump)
 
-        val latchStairs = prefs.getBoolean("opt_latch_stairs", true)
-        NativeBridge.nativeSetLatchStairs(latchStairs)
-
         val infLives = prefs.getBoolean("opt_infinite_lives", false)
         NativeBridge.nativeSetInfiniteLives(infLives)
 
@@ -404,15 +385,6 @@ class MainActivity : AppCompatActivity() {
 
         val tripleShot = prefs.getBoolean("opt_triple_shot", false)
         NativeBridge.nativeSetTripleShot(tripleShot)
-
-        val smartEnemyAi = prefs.getBoolean("opt_smart_enemy_ai", false)
-        NativeBridge.nativeSetSmartEnemyAi(smartEnemyAi)
-
-        val smartAiAggression = prefs.getInt("opt_smart_ai_aggression", 1)
-        NativeBridge.nativeSetSmartAiAggression(smartAiAggression)
-
-        val crossHeartRecovery = prefs.getBoolean("opt_cross_heart_recovery", true)
-        NativeBridge.nativeSetCrossHeartRecovery(crossHeartRecovery)
     }
 
     fun applyDisplayRefreshRate(targetHz: Float = 120.0f) {

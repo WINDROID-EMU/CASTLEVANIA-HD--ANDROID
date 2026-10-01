@@ -181,8 +181,4 @@ object NativeBridge {
     external fun nativeSetInfiniteLives(enable: Boolean)
     external fun nativeSetMaxWhip(enable: Boolean)
     external fun nativeSetTripleShot(enable: Boolean)
-    external fun nativeSetSmartEnemyAi(enable: Boolean)
-    external fun nativeSetSmartAiAggression(level: Int)
-    external fun nativeSetLatchStairs(enable: Boolean)
-    external fun nativeSetCrossHeartRecovery(enable: Boolean)
 }
